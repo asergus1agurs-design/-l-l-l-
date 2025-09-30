@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Channel Status</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0e0e10;
+            color: #fff;
+        }
+        .container {
+            background: #1f1f23;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #9147ff;
+            margin-top: 0;
+        }
+        .input-group {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        input, button {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            font-size: 16px;
+        }
+        input {
+            flex: 1;
+            background: #2a2a2e;
+            color: white;
+            margin-right: 10px;
+        }
+        button {
+            background: #9147ff;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #772ce8;
+        }
+        .status-card {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            background: #18181b;
+        }
+        .status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .online {
+            color: #2ed573;
+        }
+        .offline {
+            color: #ed4245;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .stat {
+            background: #26262c;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #9147ff;
+        }
+        .error {
+            color: #ed4245;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Twitch Channel Status</h1>
+        <div class="input-group">
+            <input type="text" id="channelInput" placeholder="Введите имя канала" value="iborovi">
+            <button id="checkBtn">Проверить</button>
+        </div>
+        <div class="status-card">
+            <div id="status" class="status offline">Оффлайн</div>
+            <div class="stats">
+                <div class="stat">Подписчики: <span id="followers" class="stat-value">-</span></div>
+            </div>
+            <div id="error" class="error"></div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const channelInput = document.getElementById('channelInput');
+        const checkBtn = document.getElementById('checkBtn');
+        const statusElement = document.getElementById('status');
+        const followersElement = document.getElementById('followers');
+        const errorElement = document.getElementById('error');
+
+        // Current channel and interval
+        let currentChannel = 'iborovi';
+        let checkInterval;
+
+        // Check status function
+        async function checkStatus() {
+            try {
+                errorElement.textContent = '';
+                
+                // 1. Check stream status using DecAPI
+                const statusResponse = await fetch(`https://decapi.me/twitch/uptime/${currentChannel}?no_404=true`);
+                const statusText = await statusResponse.text();
+                
+                if (statusText.includes('offline') || statusText.includes('not live')) {
+                    statusElement.textContent = 'Оффлайн';
+                    statusElement.className = 'status offline';
+                } else {
+                    statusElement.textContent = `Онлайн (${statusText})`;
+                    statusElement.className = 'status online';
+                }
+                
+                // 2. Get followers count using Scrape Creators with fallback
+                try {
+                    const followersResponse = await fetch(`https://api.scrapecreators.com/v1/twitch/channel/${currentChannel}`);
+                    if (followersResponse.ok) {
+                        const data = await followersResponse.json();
+                        followersElement.textContent = data.followers || '-';
+                    } else {
+                        // Fallback to TwitchTracker
+                        const fallbackResponse = await fetch(`https://twitchtracker.com/${currentChannel}`, { 
+                            mode: 'no-cors', 
+                            referrerPolicy: 'no-referrer'
+                        });
+                        // Note: This will only work with a CORS proxy in production
+                        followersElement.textContent = 'N/A (CORS)';
+                    }
+                } catch (followersError) {
+                    console.error('Followers fetch error:', followersError);
+                    followersElement.textContent = 'Ошибка';
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                errorElement.textContent = 'Ошибка получения данных. Попробуйте позже.';
+            }
+        }
+
+        // Event listeners
+        checkBtn.addEventListener('click', () => {
+            currentChannel = channelInput.value.trim();
+            if (currentChannel) {
+                clearInterval(checkInterval);
+                checkStatus();
+                checkInterval = setInterval(checkStatus, 60000);
+            }
+        });
+
+        // Initial check
+        checkStatus();
+        checkInterval = setInterval(checkStatus, 60000);
+
+        // CORS warning
+        console.warn('Для работы в продакшене нужен CORS-прокси или локальный сервер');
+    </script>
+</body>
+</html>
